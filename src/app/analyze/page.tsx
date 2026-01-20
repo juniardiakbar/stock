@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { 
   Search, 
   TrendingUp, 
@@ -9,19 +9,13 @@ import {
   Plus, 
   Trash2, 
   Zap, 
-  CheckCircle2, 
-  AlertCircle, 
-  Info,
-  BarChart3,
   Flame,
   Star,
   Target,
-  ShieldCheck,
-  ArrowRight
-} from "lucide-react";
+  ShieldCheck} from "lucide-react";
 import Link from "next/link";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { Stock, UserSettings } from "@/types";
+import { UserSettings } from "@/types";
 import { fetchMultipleStockPrices } from "@/app/actions";
 import { analyzePotentialBuy } from "@/lib/engine";
 import { clsx, type ClassValue } from "clsx";
@@ -72,7 +66,7 @@ export default function OpportunityScanner() {
 
   useEffect(() => {
     runAnalysis();
-  }, []);
+  }, [runAnalysis]);
 
   const getRankScore = (suggestion: any) => {
     let score = 0;
@@ -270,7 +264,7 @@ export default function OpportunityScanner() {
                           {item.suggestion.action.replace('_', ' ')}
                         </div>
                         <div className="text-xs font-bold text-white/70 leading-relaxed text-center italic">
-                          "{item.suggestion.reason}"
+                          {item.suggestion.reason}
                         </div>
                       </div>
 
@@ -355,7 +349,7 @@ export default function OpportunityScanner() {
                   </div>
                   <h4 className="text-lg font-bold mb-2">No Clear Opportunities</h4>
                   <p className="text-white/40 text-sm max-w-md mx-auto">
-                    The engine didn't find any stocks meeting the required criteria. 
+                    The engine didn&apos;t find any stocks meeting the required criteria. 
                     Try adding more tickers or wait for the next market cycle.
                   </p>
                   <button 
