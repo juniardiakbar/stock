@@ -61,6 +61,7 @@ export default function Dashboard() {
     symbol: "",
     buyPrice: 0,
     lots: 0,
+    type: 'BUY'
   });
 
   const portfolio = useMemo(() => {
@@ -104,9 +105,10 @@ export default function Dashboard() {
         buyPrice: Number(newTransaction.buyPrice),
         lots: Number(newTransaction.lots),
         date: new Date().toISOString(),
+        type: newTransaction.type as 'BUY' | 'SELL' || 'BUY',
       };
       setTransactions([...transactions, transaction]);
-      setNewTransaction({ symbol: "", buyPrice: 0, lots: 0 });
+      setNewTransaction({ symbol: "", buyPrice: 0, lots: 0, type: 'BUY' });
       setIsAdding(false);
     }
   };
@@ -814,6 +816,12 @@ export default function Dashboard() {
                   >
                     <div className="relative z-10 flex flex-col">
                       <div className="flex items-center gap-2 mb-1">
+                        <span className={cn(
+                          "text-[9px] font-black px-1.5 py-0.5 rounded",
+                          t.type === 'SELL' ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"
+                        )}>
+                          {t.type || 'BUY'}
+                        </span>
                         <span className="font-black text-sm tracking-tighter">
                           {t.symbol}
                         </span>
@@ -860,20 +868,49 @@ export default function Dashboard() {
                 className="glass-card w-full max-w-md p-10 shadow-[0_0_100px_rgba(59,130,246,0.1)] border-white/10"
               >
                 <div className="flex items-center gap-4 mb-8">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-600/20">
-                    <Plus size={28} />
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-xl transition-colors",
+                    newTransaction.type === 'SELL' ? "bg-red-600 shadow-red-600/20" : "bg-blue-600 shadow-blue-600/20"
+                  )}>
+                    {newTransaction.type === 'SELL' ? <TrendingUp size={28} className="rotate-180" /> : <Plus size={28} />}
                   </div>
                   <div>
                     <h2 className="text-2xl font-black tracking-tight">
-                      Open Position
+                      {newTransaction.type === 'SELL' ? 'Close Position' : 'Open Position'}
                     </h2>
                     <p className="text-xs font-medium text-white/40 uppercase tracking-widest">
-                      Add stock TO your portfolio
+                      {newTransaction.type === 'SELL' ? 'Realize profit or loss' : 'Add stock to your portfolio'}
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-6">
+                  {/* Transaction Type Toggle */}
+                  <div className="flex p-1 bg-white/5 rounded-xl border border-white/5">
+                    <button
+                      onClick={() => setNewTransaction({ ...newTransaction, type: 'BUY' })}
+                      className={cn(
+                        "flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+                        newTransaction.type === 'BUY' 
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
+                          : "text-white/40 hover:text-white"
+                      )}
+                    >
+                      Buy Stock
+                    </button>
+                    <button
+                      onClick={() => setNewTransaction({ ...newTransaction, type: 'SELL' })}
+                       className={cn(
+                        "flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+                        newTransaction.type === 'SELL' 
+                          ? "bg-red-600 text-white shadow-lg shadow-red-600/20" 
+                          : "text-white/40 hover:text-white"
+                      )}
+                    >
+                      Sell Stock
+                    </button>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-white/30 tracking-widest ml-1">
                       Stock Ticker
@@ -888,7 +925,10 @@ export default function Dashboard() {
                           symbol: e.target.value.toUpperCase(),
                         })
                       }
-                      className="glass-input w-full h-14 text-2xl font-black uppercase tracking-tighter placeholder:text-white/5 focus:ring-2 focus:ring-blue-600/20"
+                      className={cn(
+                        "glass-input w-full h-14 text-2xl font-black uppercase tracking-tighter placeholder:text-white/5 focus:ring-2 transition-all",
+                        newTransaction.type === 'SELL' ? "focus:ring-red-600/20" : "focus:ring-blue-600/20"
+                      )}
                     />
                   </div>
 
@@ -932,9 +972,14 @@ export default function Dashboard() {
                   <div className="pt-6 flex gap-4">
                     <button
                       onClick={handleAddTransaction}
-                      className="h-14 bg-blue-600 hover:bg-blue-500 text-white flex-1 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-[0.98] shadow-xl shadow-blue-600/20"
+                      className={cn(
+                        "h-14 text-white flex-1 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-[0.98] shadow-xl",
+                        newTransaction.type === 'SELL' 
+                          ? "bg-red-600 hover:bg-red-500 shadow-red-600/20" 
+                          : "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20"
+                      )}
                     >
-                      Confirm Buy
+                      {newTransaction.type === 'SELL' ? 'Confirm Sell' : 'Confirm Buy'}
                     </button>
                     <button
                       onClick={() => setIsAdding(false)}
@@ -1098,6 +1143,89 @@ export default function Dashboard() {
                             want to be left holding the bag.
                           </p>
                         </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Bandarmology Patterns */}
+                  <section>
+                    <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-blue-400 mb-4 px-1">
+                      5 Institutional Patterns (Bandarmology)
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-black rounded uppercase">
+                            Absorption
+                          </span>
+                          <span className="text-xs font-bold text-white">
+                            Quiet Collection
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          High volume but price stays stable = bandar collecting
+                          shares quietly before big move. BULLISH signal.
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-black rounded uppercase">
+                            Markup
+                          </span>
+                          <span className="text-xs font-bold text-white">
+                            Pushing Higher
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          Price rising on high volume = bandar aggressively
+                          pushing price up. Strong BULLISH momentum.
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-amber-500/5 rounded-xl border border-amber-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-black rounded uppercase">
+                            Distribution Ceiling
+                          </span>
+                          <span className="text-xs font-bold text-white">
+                            Seller Resistance
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          Price fails at resistance multiple times with volume =
+                          bandar selling at the top. Warning to TAKE PROFIT.
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-red-500/5 rounded-xl border border-red-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-[10px] font-black rounded uppercase">
+                            Shakeout
+                          </span>
+                          <span className="text-xs font-bold text-white">
+                            Scare Retail
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          Sharp drop on huge volume but quick recovery = bandar
+                          shaking out weak hands before next leg up. BUY THE DIP!
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-blue-500/5 rounded-xl border border-blue-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-black rounded uppercase">
+                            Breakout
+                          </span>
+                          <span className="text-xs font-bold text-white">
+                            Breaking Key Level
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          Volume surge + price breaks resistance = confirmation of
+                          strong move. Bullish momentum continues higher.
+                        </p>
                       </div>
                     </div>
                   </section>

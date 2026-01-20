@@ -43,6 +43,7 @@ export interface BandarmologySignal {
 
 export interface Transaction {
   id: string;
+  type: 'BUY' | 'SELL';
   symbol: string;
   buyPrice: number;
   lots: number; // 1 lot = 100 shares in Indonesia
