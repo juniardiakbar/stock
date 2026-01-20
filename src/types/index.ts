@@ -59,6 +59,8 @@ export interface PortfolioItem {
   costBasis: number;
   unrealizedPL: number;
   unrealizedPLPercent: number;
+  realizedPL: number; // Profit/Loss already taken
+  totalSoldLots: number; // total lots already sold
   allocationPercent: number;
   suggestion: ActionSuggestion;
   tradingPlan: TradingPlan; // Detailed plan per stock
@@ -102,6 +104,10 @@ export interface TradingPlan {
   immediateAction: string;
   shortTermPlan: string; // 1-5 days
   notes: string;
+
+  // Contextual Data
+  nextTarget?: PriceLevel & { label: string };
+  initialPositionLots: number;
 }
 
 export interface PriceLevel {

@@ -14,7 +14,9 @@ import {
   Download,
   Upload,
   HelpCircle,
+  Zap,
 } from "lucide-react";
+import Link from "next/link";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { Transaction, UserSettings, Stock } from "@/types";
 import { fetchMultipleStockPrices } from "@/app/actions";
@@ -68,14 +70,17 @@ export default function Dashboard() {
     return calculatePortfolio(transactions, stocksData, settings);
   }, [transactions, stocksData, settings]);
 
-  const totalMarketValue = portfolio.reduce(
+  const activePortfolio = useMemo(() => portfolio.filter(item => item.totalLots > 0), [portfolio]);
+  
+  const totalMarketValue = activePortfolio.reduce(
     (acc, item) => acc + item.marketValue,
     0,
   );
-  const totalCost = portfolio.reduce((acc, item) => acc + item.costBasis, 0);
-  const totalPL = totalMarketValue - totalCost;
+  const totalCost = activePortfolio.reduce((acc, item) => acc + item.costBasis, 0);
+  const totalRealizedPL = portfolio.reduce((acc, item) => acc + item.realizedPL, 0);
+  const totalPL = (totalMarketValue - totalCost); // Unrealized
   const totalPLPercent = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
-  const cashRemaining = settings.totalCapital - totalCost;
+  const cashRemaining = settings.totalCapital - totalCost + totalRealizedPL;
 
   const refreshData = useCallback(async () => {
     setIsLoading(true);
@@ -175,13 +180,24 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="flex items-center gap-4 text-sm font-medium text-white/60">
+            <Link
+              href="/analyze"
+              className="hover:text-white flex items-center gap-1.5 transition-colors group px-3 py-1.5 bg-blue-600/10 rounded-full border border-blue-600/20"
+            >
+              <Zap
+                size={16}
+                className="text-blue-400 group-hover:scale-110 transition-transform"
+              />
+              <span className="text-blue-400 font-bold uppercase tracking-tighter text-[10px]">Scanner</span>
+            </Link>
+            <div className="w-px h-4 bg-white/10 mx-1" />
             <button
               onClick={() => setIsHelpOpen(true)}
               className="hover:text-white flex items-center gap-1.5 transition-colors group"
             >
               <HelpCircle
                 size={18}
-                className="text-blue-400 group-hover:scale-110 transition-transform"
+                className="text-white/40 group-hover:scale-110 transition-transform"
               />
               <span className="hidden sm:inline">Guide</span>
             </button>
@@ -225,21 +241,10 @@ export default function Dashboard() {
         >
           <div className="glass-card p-6">
             <p className="text-white/50 text-xs mb-1 uppercase tracking-widest font-bold">
-              Total Assets
+              Unrealized P/L
             </p>
             <h2 className="text-2xl font-bold">
-              Rp {(totalMarketValue + cashRemaining).toLocaleString("id-ID")}
-            </h2>
-            <p className="text-xs text-white/30 mt-1">
-              Capital: Rp {settings.totalCapital.toLocaleString("id-ID")}
-            </p>
-          </div>
-          <div className="glass-card p-6">
-            <p className="text-white/50 text-xs mb-1 uppercase tracking-widest font-bold">
-              Stock Value
-            </p>
-            <h2 className="text-2xl font-bold">
-              Rp {totalMarketValue.toLocaleString("id-ID")}
+              Rp {totalPL.toLocaleString("id-ID")}
             </h2>
             <p
               className={cn(
@@ -247,8 +252,18 @@ export default function Dashboard() {
                 totalPL >= 0 ? "text-emerald-400" : "text-red-400",
               )}
             >
-              {totalPL >= 0 ? "▲" : "▼"} {totalPLPercent.toFixed(2)}% (Rp{" "}
-              {Math.abs(totalPL).toLocaleString("id-ID")})
+              {totalPL >= 0 ? "▲" : "▼"} {totalPLPercent.toFixed(2)}%
+            </p>
+          </div>
+          <div className="glass-card p-6 border-emerald-500/20 bg-emerald-500/[0.02]">
+            <p className="text-white/50 text-xs mb-1 uppercase tracking-widest font-bold">
+              Realized Profit
+            </p>
+            <h2 className="text-2xl font-bold text-emerald-400">
+              Rp {totalRealizedPL.toLocaleString("id-ID")}
+            </h2>
+            <p className="text-xs text-white/30 mt-1 uppercase font-bold tracking-tighter">
+              Cash In Pocket
             </p>
           </div>
           <div className="glass-card p-6">
@@ -324,7 +339,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {portfolio.length === 0 ? (
+                    {activePortfolio.length === 0 ? (
                       <tr>
                         <td
                           colSpan={5}
@@ -335,7 +350,7 @@ export default function Dashboard() {
                         </td>
                       </tr>
                     ) : (
-                      portfolio.map((item) => (
+                      activePortfolio.map((item) => (
                         <tr
                           key={item.symbol}
                           className="hover:bg-white/[0.01] transition-colors group"
@@ -403,6 +418,11 @@ export default function Dashboard() {
                                           {flag}
                                         </span>
                                       ))}
+                                    {item.totalSoldLots > 0 && (
+                                      <span className="text-[9px] font-black px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20">
+                                        PARTIAL EXIT: Rp {item.realizedPL.toLocaleString("id-ID")}
+                                      </span>
+                                    )}
                                   </div>
                                 )}
 
@@ -508,11 +528,11 @@ export default function Dashboard() {
                                   {item.tradingPlan.takeProfit1.price > 0 && (
                                     <div className="flex flex-col">
                                       <span className="text-[9px] text-white/30 uppercase font-bold tracking-tighter">
-                                        TP1
+                                        {item.tradingPlan.nextTarget?.label || "TP1"}
                                       </span>
                                       <span className="text-emerald-400 font-mono text-xs font-bold">
                                         Rp{" "}
-                                        {item.tradingPlan.takeProfit1.price.toLocaleString(
+                                        {(item.tradingPlan.nextTarget?.price || item.tradingPlan.takeProfit1.price).toLocaleString(
                                           "id-ID",
                                         )}
                                       </span>
@@ -595,8 +615,8 @@ export default function Dashboard() {
                   <PieChart>
                     <Pie
                       data={
-                        portfolio.length > 0
-                          ? (portfolio as any[])
+                        activePortfolio.length > 0
+                          ? (activePortfolio as any[])
                           : [{ symbol: "Cash", marketValue: cashRemaining }]
                       }
                       cx="50%"
@@ -607,13 +627,13 @@ export default function Dashboard() {
                       dataKey="marketValue"
                       stroke="none"
                     >
-                      {portfolio.map((_, index) => (
+                      {activePortfolio.map((_, index) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={COLORS[index % COLORS.length]}
                         />
                       ))}
-                      {portfolio.length === 0 && <Cell fill="#1a1a1a" />}
+                      {activePortfolio.length === 0 && <Cell fill="#1a1a1a" />}
                     </Pie>
                     <Tooltip
                       contentStyle={{
@@ -631,7 +651,7 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
               <div className="space-y-3">
-                {portfolio.map((item, index) => (
+                {activePortfolio.map((item, index) => (
                   <div
                     key={item.symbol}
                     className="flex items-center justify-between text-xs group"

@@ -23,6 +23,8 @@ export function calculatePortfolio(
           totalLots: 0,
           totalCost: 0,
           transactions: [],
+          realizedPL: 0,
+          totalSoldLots: 0,
         };
       }
 
@@ -33,6 +35,12 @@ export function calculatePortfolio(
           : 0;
         
         const validSellLots = Math.min(acc[t.symbol].totalLots, t.lots); // Prevent negative lots
+        
+        // Realized P/L = (Sell Price - Cost Basis Price) * lots * 100
+        const profit = (t.buyPrice - currentAvgPrice) * t.lots * 100;
+        acc[t.symbol].realizedPL += profit;
+        acc[t.symbol].totalSoldLots += t.lots;
+
         acc[t.symbol].totalLots -= validSellLots;
         acc[t.symbol].totalCost -= validSellLots * 100 * currentAvgPrice;
       } else {
@@ -47,7 +55,13 @@ export function calculatePortfolio(
     },
     {} as Record<
       string,
-      { totalLots: number; totalCost: number; transactions: Transaction[] }
+      {
+        totalLots: number;
+        totalCost: number;
+        transactions: Transaction[];
+        realizedPL: number;
+        totalSoldLots: number;
+      }
     >,
   );
 
@@ -81,6 +95,7 @@ export function calculatePortfolio(
       avgPrice,
       unrealizedPLPercent,
       settings,
+      data.totalSoldLots,
     );
     const tradingPlan = generateTradingPlan(
       stock,
@@ -89,6 +104,7 @@ export function calculatePortfolio(
       unrealizedPLPercent,
       settings,
       availableCapital,
+      data.totalSoldLots,
     );
 
     return {
@@ -101,18 +117,47 @@ export function calculatePortfolio(
       unrealizedPL,
       unrealizedPLPercent,
       allocationPercent,
+      realizedPL: data.realizedPL,
+      totalSoldLots: data.totalSoldLots,
       suggestion,
       tradingPlan,
     };
   });
 }
 
-function generateSuggestion(
+export function analyzePotentialBuy(
+  stock: Stock,
+  settings: UserSettings,
+  availableCapital: number = settings.totalCapital,
+) {
+  const currentPrice = stock.currentPrice;
+  // For a potential buy, we assume we buy at current price to see the plan
+  // We use 0 for totalLots to indicate it's not in portfolio yet
+  const suggestion = generateSuggestion(stock, 0, currentPrice, 0, settings);
+  const tradingPlan = generateTradingPlan(
+    stock,
+    0,
+    currentPrice,
+    0,
+    settings,
+    availableCapital,
+  );
+
+  return {
+    symbol: stock.symbol,
+    suggestion,
+    tradingPlan,
+    currentPrice,
+  };
+}
+
+export function generateSuggestion(
   stock: Stock | undefined,
   totalLots: number,
   avgPrice: number,
   unrealizedPLPercent: number,
   settings: UserSettings,
+  soldLots: number = 0,
 ): ActionSuggestion {
   const defaultSuggestion: ActionSuggestion = {
     action: "HOLD",
@@ -190,6 +235,13 @@ function generateSuggestion(
   // ACTION DETERMINATION
   // ========================================
 
+  const initialPositionLots = totalLots + soldLots;
+  const tp1TargetLots = Math.ceil(initialPositionLots * 0.3);
+  const tp2TargetLots = Math.ceil(initialPositionLots * 0.7); // TP1 + TP2 = 70%
+
+  const hasTakenTP1 = soldLots >= tp1TargetLots && soldLots > 0;
+  const hasTakenTP2 = soldLots >= tp2TargetLots && soldLots > 0;
+
   // PRIORITY 1: STRONG DISTRIBUTION - Exit even without stop loss hit
   if (bandarmologyStatus === "STRONG_DISTRIBUTION") {
     action = "SELL";
@@ -208,28 +260,35 @@ function generateSuggestion(
     urgency = "IMMEDIATE";
     reason = `Stop Loss hit (${unrealizedPLPercent.toFixed(1)}%). Cut loss now!`;
   }
-  // PRIORITY 4: Take Profit conditions
-  // TP1 level = half of target (e.g., 10% if target is 20%)
-  else if (unrealizedPLPercent >= settings.takeProfitTarget) {
+  // PRIORITY 4: Take Profit conditions (Dynamic based on soldLots)
+  else if (unrealizedPLPercent >= settings.takeProfitTarget * 1.5) {
     action = "TAKE_PROFIT";
     urgency = "IMMEDIATE";
-    reason = `TARGET HIT! Profit +${unrealizedPLPercent.toFixed(1)}%. Time to take profits!`;
+    reason = `ULTIMATE TARGET HIT! Profit +${unrealizedPLPercent.toFixed(1)}%. Exit remaining.`;
+  } else if (unrealizedPLPercent >= settings.takeProfitTarget && !hasTakenTP2) {
+    action = "TAKE_PROFIT";
+    urgency = "IMMEDIATE";
+    reason = `TP2 REACHED! Profit +${unrealizedPLPercent.toFixed(1)}%. Secure more gains.`;
   } else if (
     unrealizedPLPercent >= settings.takeProfitTarget * 0.5 &&
-    unrealizedPLPercent > 0
+    !hasTakenTP1
   ) {
-    // Price has reached TP1 level (half of target, e.g., 10% if target is 20%)
     action = "TAKE_PROFIT";
     urgency = "SOON";
-    reason = `TP1 reached (+${unrealizedPLPercent.toFixed(1)}%). Consider selling a portion.`;
+    reason = `TP1 reached (+${unrealizedPLPercent.toFixed(1)}%). Take partial profit.`;
   } else if (
     rsi >= (settings.riskTolerance === "CONSERVATIVE" ? 70 : 80) &&
-    pricePosition > 85
+    pricePosition > 85 &&
+    !hasTakenTP1 // Only suggest rsi-based exit if we haven't even taken TP1
   ) {
     action = "TAKE_PROFIT";
     urgency = "SOON";
     reason = `RSI Overbought (${rsi.toFixed(0)}) + Near resistance. Consider selling.`;
-  } else if (pattern === "DISTRIBUTION_CEILING" && unrealizedPLPercent > 5) {
+  } else if (
+    pattern === "DISTRIBUTION_CEILING" &&
+    unrealizedPLPercent > 5 &&
+    !hasTakenTP1
+  ) {
     action = "TAKE_PROFIT";
     urgency = "WATCH";
     reason = `Distribution ceiling pattern - take profits before reversal.`;
@@ -294,13 +353,14 @@ function generateSuggestion(
   };
 }
 
-function generateTradingPlan(
+export function generateTradingPlan(
   stock: Stock | undefined,
   totalLots: number,
   avgPrice: number,
   unrealizedPLPercent: number,
   settings: UserSettings,
   availableCapital: number,
+  soldLots: number = 0,
 ): TradingPlan {
   const defaultPlan: TradingPlan = {
     positionHealth: "WARNING",
@@ -316,6 +376,7 @@ function generateTradingPlan(
     immediateAction: "Data not available",
     shortTermPlan: "Waiting for data",
     notes: "",
+    initialPositionLots: 0,
   };
 
   if (!stock?.indicators || !stock?.bandarmology) {
@@ -504,6 +565,7 @@ function generateTradingPlan(
   // SELL STRATEGY
   // ========================================
 
+  const initialPositionLots = totalLots + soldLots;
   const sellStrategy: SellStep[] = [];
 
   // Strategy depends on current condition
@@ -533,35 +595,46 @@ function generateTradingPlan(
       reason: "Stop loss - sell remaining",
     });
   } else {
-    // Normal scaling out strategy
-    const tp1Lots = Math.ceil(totalLots * 0.3);
-    const tp2Lots = Math.ceil(totalLots * 0.4);
-    const tp3Lots = totalLots - tp1Lots - tp2Lots;
+    // Normal scaling out strategy (Dynamic based on what's already sold)
+    const tp1TargetLots = Math.ceil(initialPositionLots * 0.3);
+    const tp2TargetLots = Math.ceil(initialPositionLots * 0.4);
+    const tp3TargetLots = initialPositionLots - tp1TargetLots - tp2TargetLots;
 
-    if (tp1Lots > 0) {
+    // Calculate how many lots are actually left for each target
+    let remainingTP1 = Math.max(0, tp1TargetLots - soldLots);
+    let usedFromSoldForTP1 = Math.min(soldLots, tp1TargetLots);
+    let leftoverSold = soldLots - usedFromSoldForTP1;
+
+    let remainingTP2 = Math.max(0, tp2TargetLots - leftoverSold);
+    let usedFromSoldForTP2 = Math.min(leftoverSold, tp2TargetLots);
+    leftoverSold = leftoverSold - usedFromSoldForTP2;
+
+    let remainingTP3 = Math.max(0, tp3TargetLots - leftoverSold);
+
+    if (remainingTP1 > 0) {
       sellStrategy.push({
         triggerCondition: `TP1: Price reaches ${takeProfit1.price}`,
         price: takeProfit1.price,
-        lotsToSell: tp1Lots,
-        percentOfPosition: 30,
-        reason: "Take partial profit - secure 30%",
+        lotsToSell: remainingTP1,
+        percentOfPosition: Math.round((remainingTP1 / initialPositionLots) * 100),
+        reason: soldLots > 0 ? `Resume scaling (TP1)` : "Take partial profit - secure 30%",
       });
     }
-    if (tp2Lots > 0) {
+    if (remainingTP2 > 0) {
       sellStrategy.push({
         triggerCondition: `TP2: Price reaches ${takeProfit2.price}`,
         price: takeProfit2.price,
-        lotsToSell: tp2Lots,
-        percentOfPosition: 40,
-        reason: "Primary target - sell 40%",
+        lotsToSell: remainingTP2,
+        percentOfPosition: Math.round((remainingTP2 / initialPositionLots) * 100),
+        reason: soldLots > tp1TargetLots ? "Next target after partial exit" : "Primary target - sell 40%",
       });
     }
-    if (tp3Lots > 0) {
+    if (remainingTP3 > 0) {
       sellStrategy.push({
         triggerCondition: `TP3: Price reaches ${takeProfit3.price}`,
         price: takeProfit3.price,
-        lotsToSell: tp3Lots,
-        percentOfPosition: 30,
+        lotsToSell: remainingTP3,
+        percentOfPosition: Math.round((remainingTP3 / initialPositionLots) * 100),
         reason: "Extended target - sell remaining",
       });
     }
@@ -603,18 +676,38 @@ function generateTradingPlan(
     shortTermPlan = `Monitor closely. Stop loss at ${stopLoss.price}`;
     notes = "Warning signals detected. Reduce exposure and monitor.";
   } else if (positionHealth === "EXCELLENT") {
-    immediateAction = "HOLD - position healthy";
+    immediateAction = soldLots > 0 ? `HOLD - Realized profit exists, let the rest run` : "HOLD - position healthy";
     if (addZones.length > 0 && addZones[0].priority === "HIGH") {
       immediateAction = `Can add ${addZones[0].lots} lots at ${addZones[0].price}`;
     }
     shortTermPlan = `Target TP1: ${takeProfit1.price}, TP2: ${takeProfit2.price}`;
-    notes = "Position strong with positive bandarmology. Follow the plan.";
+    notes = soldLots > 0 ? `Already scaled out ${soldLots} lots. Running remaining position.` : "Position strong with positive bandarmology. Follow the plan.";
   } else {
-    immediateAction = "HOLD - wait for clearer signal";
+    immediateAction = soldLots > 0 ? `HOLD - Partial profit taken, watching for next move` : "HOLD - wait for clearer signal";
     shortTermPlan = `Watch support at ${Math.round(support)}, resistance at ${Math.round(resistance)}`;
     if (addZones.length > 0) {
       notes = `Add zones available: ${addZones.map((z) => `${z.price} (${z.lots} lots)`).join(", ")}`;
     }
+  }
+
+  // Determine Next Target for UI
+  let nextTarget: (PriceLevel & { label: string }) | undefined;
+  const activeTPStep = sellStrategy.find(
+    (s) => s.lotsToSell !== "ALL" && s.triggerCondition.includes("TP"),
+  );
+
+  if (activeTPStep) {
+    const labelMatch = activeTPStep.triggerCondition.match(/TP\d/);
+    nextTarget = {
+      price: activeTPStep.price,
+      percentFromCurrent:
+        ((activeTPStep.price - currentPrice) / currentPrice) * 100,
+      reason: activeTPStep.reason,
+      label: labelMatch ? labelMatch[0] : "Target",
+    };
+  } else {
+    // If no TP left, use TP3 as reference
+    nextTarget = { ...takeProfit3, label: "TP3" };
   }
 
   return {
@@ -631,5 +724,7 @@ function generateTradingPlan(
     immediateAction,
     shortTermPlan,
     notes,
+    initialPositionLots,
+    nextTarget,
   };
 }
