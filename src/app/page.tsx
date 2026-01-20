@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp,
@@ -61,7 +61,7 @@ export default function Dashboard() {
     symbol: "",
     buyPrice: 0,
     lots: 0,
-    type: 'BUY'
+    type: "BUY",
   });
 
   const portfolio = useMemo(() => {
@@ -77,7 +77,7 @@ export default function Dashboard() {
   const totalPLPercent = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
   const cashRemaining = settings.totalCapital - totalCost;
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     setIsLoading(true);
     const symbols = Array.from(new Set(transactions.map((t) => t.symbol)));
     if (symbols.length > 0) {
@@ -85,13 +85,13 @@ export default function Dashboard() {
       setStocksData(data);
     }
     setIsLoading(false);
-  };
+  }, [transactions]);
 
   useEffect(() => {
     if (transactions.length > 0) {
       refreshData();
     }
-  }, [transactions.length]);
+  }, [transactions.length, refreshData]);
 
   const handleAddTransaction = () => {
     if (
@@ -105,10 +105,10 @@ export default function Dashboard() {
         buyPrice: Number(newTransaction.buyPrice),
         lots: Number(newTransaction.lots),
         date: new Date().toISOString(),
-        type: newTransaction.type as 'BUY' | 'SELL' || 'BUY',
+        type: (newTransaction.type as "BUY" | "SELL") || "BUY",
       };
       setTransactions([...transactions, transaction]);
-      setNewTransaction({ symbol: "", buyPrice: 0, lots: 0, type: 'BUY' });
+      setNewTransaction({ symbol: "", buyPrice: 0, lots: 0, type: "BUY" });
       setIsAdding(false);
     }
   };
@@ -816,11 +816,15 @@ export default function Dashboard() {
                   >
                     <div className="relative z-10 flex flex-col">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={cn(
-                          "text-[9px] font-black px-1.5 py-0.5 rounded",
-                          t.type === 'SELL' ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"
-                        )}>
-                          {t.type || 'BUY'}
+                        <span
+                          className={cn(
+                            "text-[9px] font-black px-1.5 py-0.5 rounded",
+                            t.type === "SELL"
+                              ? "bg-red-500/20 text-red-400"
+                              : "bg-blue-500/20 text-blue-400",
+                          )}
+                        >
+                          {t.type || "BUY"}
                         </span>
                         <span className="font-black text-sm tracking-tighter">
                           {t.symbol}
@@ -868,18 +872,30 @@ export default function Dashboard() {
                 className="glass-card w-full max-w-md p-10 shadow-[0_0_100px_rgba(59,130,246,0.1)] border-white/10"
               >
                 <div className="flex items-center gap-4 mb-8">
-                  <div className={cn(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-xl transition-colors",
-                    newTransaction.type === 'SELL' ? "bg-red-600 shadow-red-600/20" : "bg-blue-600 shadow-blue-600/20"
-                  )}>
-                    {newTransaction.type === 'SELL' ? <TrendingUp size={28} className="rotate-180" /> : <Plus size={28} />}
+                  <div
+                    className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-xl transition-colors",
+                      newTransaction.type === "SELL"
+                        ? "bg-red-600 shadow-red-600/20"
+                        : "bg-blue-600 shadow-blue-600/20",
+                    )}
+                  >
+                    {newTransaction.type === "SELL" ? (
+                      <TrendingUp size={28} className="rotate-180" />
+                    ) : (
+                      <Plus size={28} />
+                    )}
                   </div>
                   <div>
                     <h2 className="text-2xl font-black tracking-tight">
-                      {newTransaction.type === 'SELL' ? 'Close Position' : 'Open Position'}
+                      {newTransaction.type === "SELL"
+                        ? "Close Position"
+                        : "Open Position"}
                     </h2>
                     <p className="text-xs font-medium text-white/40 uppercase tracking-widest">
-                      {newTransaction.type === 'SELL' ? 'Realize profit or loss' : 'Add stock to your portfolio'}
+                      {newTransaction.type === "SELL"
+                        ? "Realize profit or loss"
+                        : "Add stock to your portfolio"}
                     </p>
                   </div>
                 </div>
@@ -888,23 +904,27 @@ export default function Dashboard() {
                   {/* Transaction Type Toggle */}
                   <div className="flex p-1 bg-white/5 rounded-xl border border-white/5">
                     <button
-                      onClick={() => setNewTransaction({ ...newTransaction, type: 'BUY' })}
+                      onClick={() =>
+                        setNewTransaction({ ...newTransaction, type: "BUY" })
+                      }
                       className={cn(
                         "flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                        newTransaction.type === 'BUY' 
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
-                          : "text-white/40 hover:text-white"
+                        newTransaction.type === "BUY"
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                          : "text-white/40 hover:text-white",
                       )}
                     >
                       Buy Stock
                     </button>
                     <button
-                      onClick={() => setNewTransaction({ ...newTransaction, type: 'SELL' })}
-                       className={cn(
+                      onClick={() =>
+                        setNewTransaction({ ...newTransaction, type: "SELL" })
+                      }
+                      className={cn(
                         "flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                        newTransaction.type === 'SELL' 
-                          ? "bg-red-600 text-white shadow-lg shadow-red-600/20" 
-                          : "text-white/40 hover:text-white"
+                        newTransaction.type === "SELL"
+                          ? "bg-red-600 text-white shadow-lg shadow-red-600/20"
+                          : "text-white/40 hover:text-white",
                       )}
                     >
                       Sell Stock
@@ -927,7 +947,9 @@ export default function Dashboard() {
                       }
                       className={cn(
                         "glass-input w-full h-14 text-2xl font-black uppercase tracking-tighter placeholder:text-white/5 focus:ring-2 transition-all",
-                        newTransaction.type === 'SELL' ? "focus:ring-red-600/20" : "focus:ring-blue-600/20"
+                        newTransaction.type === "SELL"
+                          ? "focus:ring-red-600/20"
+                          : "focus:ring-blue-600/20",
                       )}
                     />
                   </div>
@@ -974,12 +996,14 @@ export default function Dashboard() {
                       onClick={handleAddTransaction}
                       className={cn(
                         "h-14 text-white flex-1 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-[0.98] shadow-xl",
-                        newTransaction.type === 'SELL' 
-                          ? "bg-red-600 hover:bg-red-500 shadow-red-600/20" 
-                          : "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20"
+                        newTransaction.type === "SELL"
+                          ? "bg-red-600 hover:bg-red-500 shadow-red-600/20"
+                          : "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20",
                       )}
                     >
-                      {newTransaction.type === 'SELL' ? 'Confirm Sell' : 'Confirm Buy'}
+                      {newTransaction.type === "SELL"
+                        ? "Confirm Sell"
+                        : "Confirm Buy"}
                     </button>
                     <button
                       onClick={() => setIsAdding(false)}
@@ -1126,8 +1150,8 @@ export default function Dashboard() {
                             Big Institutions/Banks are quietly buying.
                           </p>
                           <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                            Think of them as "Smart Money." When they buy, the
-                            price usually follows up later.
+                            Think of them as &quot;Smart Money.&quot; When they
+                            buy, the price usually follows up later.
                           </p>
                         </div>
                         <div className="h-px bg-white/5" />
@@ -1139,8 +1163,8 @@ export default function Dashboard() {
                             Big Institutions are selling to the public.
                           </p>
                           <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                            This is a warning! If they are leaving, you don't
-                            want to be left holding the bag.
+                            This is a warning! If they are leaving, you
+                            don&apos;t want to be left holding the bag.
                           </p>
                         </div>
                       </div>
@@ -1209,7 +1233,8 @@ export default function Dashboard() {
                         </div>
                         <p className="text-xs text-white/60 leading-relaxed">
                           Sharp drop on huge volume but quick recovery = bandar
-                          shaking out weak hands before next leg up. BUY THE DIP!
+                          shaking out weak hands before next leg up. BUY THE
+                          DIP!
                         </p>
                       </div>
 
@@ -1223,8 +1248,8 @@ export default function Dashboard() {
                           </span>
                         </div>
                         <p className="text-xs text-white/60 leading-relaxed">
-                          Volume surge + price breaks resistance = confirmation of
-                          strong move. Bullish momentum continues higher.
+                          Volume surge + price breaks resistance = confirmation
+                          of strong move. Bullish momentum continues higher.
                         </p>
                       </div>
                     </div>
@@ -1246,8 +1271,9 @@ export default function Dashboard() {
                           </p>
                           <p className="text-[11px] text-white/40 leading-relaxed">
                             Measured 0-100. Over 80 means the stock is
-                            "Overbought" (running too hot). Under 30 means it's
-                            "Oversold" (potential bargain).
+                            &quot;Overbought&quot; (running too hot). Under 30
+                            means it&apos;s &quot;Oversold&quot; (potential
+                            bargain).
                           </p>
                         </div>
                       </div>
@@ -1263,7 +1289,8 @@ export default function Dashboard() {
                             <span className="text-emerald-400">UP</span> means
                             the stock is climbing.{" "}
                             <span className="text-red-400">DOWN</span> means
-                            it's falling. We always prefer stocks moving UP.
+                            it&apos;s falling. We always prefer stocks moving
+                            UP.
                           </p>
                         </div>
                       </div>
@@ -1291,7 +1318,7 @@ export default function Dashboard() {
                     onClick={() => setIsHelpOpen(false)}
                     className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-600/20"
                   >
-                    Got it, let's trade!
+                    Got it, let&apos;s trade!
                   </button>
                 </div>
               </motion.div>
